@@ -1,8 +1,12 @@
 package com.usermanagement.config;
 
+import com.usermanagement.audit.AuditLog;
+import com.usermanagement.audit.AuditOutcome;
+import com.usermanagement.common.error.ErrorCode;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -49,10 +53,14 @@ public class SecurityConfig {
     @Bean
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver) throws Exception {
+            @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver,
+            AuditLog auditLog) throws Exception {
         // Delegate security errors to the MVC exception handler so every error has the same shape.
-        AuthenticationEntryPoint entryPoint = (request, response, ex) ->
-                exceptionResolver.resolveException(request, response, null, ex);
+        AuthenticationEntryPoint entryPoint = (request, response, ex) -> {
+            auditLog.record("security.unauthenticated", AuditOutcome.DENIED, ErrorCode.UNAUTHORIZED.name(), null,
+                    Map.of("reason", String.valueOf(ex.getMessage())));
+            exceptionResolver.resolveException(request, response, null, ex);
+        };
         AccessDeniedHandler accessDeniedHandler = (request, response, ex) ->
                 exceptionResolver.resolveException(request, response, null, ex);
 

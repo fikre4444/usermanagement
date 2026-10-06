@@ -3,9 +3,15 @@ package com.usermanagement.support;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.usermanagement.events.OutboxMessage;
+import com.usermanagement.events.Streams;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+import org.awaitility.Awaitility;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -139,6 +145,23 @@ public abstract class IntegrationTest {
 
     protected String accessToken(String identifier, String password) throws Exception {
         return login(identifier, password).get("accessToken").asString();
+    }
+
+    /** Waits until an audit record matching the predicate has been delivered, and returns it. */
+    protected JsonNode awaitAudit(Predicate<JsonNode> predicate) {
+        AtomicReference<JsonNode> found = new AtomicReference<>();
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> {
+            for (OutboxMessage message : eventSink.messages(
+                    Streams.AUDIT)) {
+                JsonNode record = json.readTree(message.payload());
+                if (predicate.test(record)) {
+                    found.set(record);
+                    return true;
+                }
+            }
+            return false;
+        });
+        return found.get();
     }
 
     protected String adminToken() throws Exception {

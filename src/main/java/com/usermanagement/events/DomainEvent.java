@@ -17,4 +17,9 @@ public interface DomainEvent {
     String aggregateId();
 
     Instant occurredAt();
+
+    /** The outbox stream the event is published on. */
+    default String stream() {
+        return Streams.DOMAIN_EVENTS;
+    }
 }

@@ -1,9 +1,11 @@
-# Local / demo stack: the service, PostgreSQL and Mailpit (a fake SMTP server with a web inbox).
+# Local / demo stack: the service, PostgreSQL, Mailpit (a fake SMTP server with a web inbox) and Kafka.
 #
 #   docker compose up --build
 #
 #   API + Swagger UI : http://localhost:8080/swagger-ui.html
 #   Mail inbox       : http://localhost:8025
+#   Kafka UI         : http://localhost:8090  (topics user-management.audit and user-management.domain-events)
+#   Kafka (host)     : localhost:29092
 #
 # The logistics example domain is mounted; point APP_DOMAIN_CONFIG at your own file to change it.
 
@@ -30,6 +32,40 @@ services:
       - "8025:8025"
       - "1025:1025"
 
+  kafka:
+    image: apache/kafka:3.9.1
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:9092,EXTERNAL://:29092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  kafka-ui:
+    image: kafbat/kafka-ui:latest
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
   user-management:
     build: .
     image: user-management-service:latest
@@ -38,6 +74,8 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      kafka:
+        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -50,6 +88,9 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin-Passw0rd}
       APP_DOMAIN_CONFIG: /config/domain.yml
+      # Publish the activity (audit) log and domain events to Kafka.
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       # For real deployments, provide a key pair (see scripts/generate-jwt-keys.sh) and use the prod profile:
       # SPRING_PROFILES_ACTIVE: prod
       # JWT_PRIVATE_KEY: file:/run/secrets/jwt-private.pem

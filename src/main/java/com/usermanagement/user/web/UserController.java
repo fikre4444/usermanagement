@@ -1,5 +1,6 @@
 package com.usermanagement.user.web;
 
+import com.usermanagement.audit.Audited;
 import com.usermanagement.config.CurrentUser;
 import com.usermanagement.user.ProfileUpdate;
 import com.usermanagement.user.UserService;
@@ -34,12 +35,14 @@ public class UserController {
         this.userService = userService;
     }
 
+    @Audited(action = "user.profile.viewed", target = "user", targetId = "#actorId")
     @GetMapping
     @Operation(summary = "Get my profile")
     public UserResponse me(@AuthenticationPrincipal Jwt jwt) {
         return UserResponse.from(userService.get(CurrentUser.id(jwt)));
     }
 
+    @Audited(action = "user.profile.updated", target = "user", targetId = "#actorId")
     @PatchMapping
     @Operation(summary = "Update my profile",
             description = "Omitted fields are unchanged; an empty string clears an optional field. "
@@ -50,6 +53,7 @@ public class UserController {
         return UserResponse.from(userService.updateProfile(CurrentUser.id(jwt), update, Actor.USER));
     }
 
+    @Audited(action = "user.password.changed", target = "user", targetId = "#actorId")
     @PostMapping("/password")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Change my password", description = "Signs out all sessions.")
@@ -57,6 +61,7 @@ public class UserController {
         userService.changePassword(CurrentUser.id(jwt), request.currentPassword(), request.newPassword());
     }
 
+    @Audited(action = "user.account.deleted", target = "user", targetId = "#actorId")
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Delete my account", description = "Erases personal data and signs out all sessions.")

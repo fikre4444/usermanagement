@@ -1,5 +1,6 @@
 package com.usermanagement.user;
 
+import com.usermanagement.audit.AuditLog;
 import com.usermanagement.usertype.Actor;
 import java.util.Map;
 import org.slf4j.Logger;
@@ -20,11 +21,14 @@ class AdminBootstrap implements ApplicationRunner {
     private final BootstrapAdminProperties properties;
     private final RegistrationService registrationService;
     private final UserLookup lookup;
+    private final AuditLog auditLog;
 
-    AdminBootstrap(BootstrapAdminProperties properties, RegistrationService registrationService, UserLookup lookup) {
+    AdminBootstrap(BootstrapAdminProperties properties, RegistrationService registrationService, UserLookup lookup,
+                   AuditLog auditLog) {
         this.properties = properties;
         this.registrationService = registrationService;
         this.lookup = lookup;
+        this.auditLog = auditLog;
     }
 
     @Override
@@ -40,9 +44,11 @@ class AdminBootstrap implements ApplicationRunner {
             return;
         }
         try {
-            registrationService.register(new RegistrationCommand(properties.userType(), properties.username(),
+            User admin = registrationService.register(new RegistrationCommand(properties.userType(), properties.username(),
                     properties.email(), null, properties.password(), "System", "Administrator", Map.of(),
                     properties.roles()), Actor.ADMIN);
+            auditLog.success("system.admin-bootstrapped", AuditLog.target("user", admin.getId()),
+                    Map.of("email", properties.email(), "roles", properties.roles()));
             log.info("Bootstrap administrator {} created", properties.email());
         } catch (DataIntegrityViolationException ex) {
             log.debug("Bootstrap administrator was created concurrently");

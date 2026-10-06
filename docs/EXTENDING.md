@@ -51,7 +51,8 @@ In other stacks, any JWT library that supports JWKS and RS256 works (e.g. `jose`
 
 ### Keep domain data in sync with events
 
-If your shipment service needs to know when a driver registers or gets suspended, configure a webhook:
+If your shipment service needs to know when a driver registers or gets suspended, consume the Kafka topic
+`user-management.domain-events` (set `KAFKA_ENABLED=true`), or configure a webhook:
 
 ```bash
 APP_EVENTS_WEBHOOK_URL=http://shipments:8080/internal/user-events
@@ -63,6 +64,7 @@ Each event is POSTed as:
 ```json
 {
   "id": "4b3c…",                    // unique, use it to de-duplicate (delivery is at-least-once)
+  "stream": "domain-events",
   "type": "user.registered",
   "aggregateType": "user",
   "aggregateId": "9f0e…",           // user id
@@ -71,28 +73,46 @@ Each event is POSTed as:
 }
 ```
 
-with headers `X-Event-Id`, `X-Event-Type` and `X-Signature: sha256=<hex HMAC-SHA256 of the raw body>`. Verify the
+Kafka messages carry exactly this envelope as their value, keyed by user id. Webhook calls add the headers
+`X-Event-Id`, `X-Event-Stream`, `X-Event-Type` and `X-Signature: sha256=<hex HMAC-SHA256 of the raw body>`. Verify the
 signature before trusting the payload. Any non-2xx response is retried with exponential backoff.
 
-To publish to a broker instead, implement an `EventSink` (it replaces the logging fallback):
+### Publish to another broker (e.g. RabbitMQ)
+
+Kafka and webhooks are built in. For any other transport, implement an `EventSink`. It receives both streams
+(`domain-events` and `audit`) unless `supports` says otherwise, and it replaces the logging fallback for those
+streams. Throwing an exception makes the outbox retry the message later.
 
 ```java
 @Component
-class KafkaEventSink implements EventSink {
+class RabbitEventSink implements EventSink {
 
-    private final KafkaTemplate<String, String> kafka;
+    private final RabbitTemplate rabbit;   // spring-boot-starter-amqp
 
-    KafkaEventSink(KafkaTemplate<String, String> kafka) {
-        this.kafka = kafka;
+    RabbitEventSink(RabbitTemplate rabbit) {
+        this.rabbit = rabbit;
+        this.rabbit.setMandatory(true);
+    }
+
+    @Override
+    public boolean supports(String stream) {
+        return Streams.AUDIT.equals(stream);       // e.g. only the activity log
     }
 
     @Override
     public void publish(OutboxMessage message) throws Exception {
-        // Keyed by user id so events for one user stay ordered within a partition.
-        kafka.send("user-events", message.aggregateId(), message.payload()).get(10, TimeUnit.SECONDS);
+        CorrelationData confirm = new CorrelationData(message.id().toString());
+        // exchange "user-management", routing key "audit.auth.login", "audit.admin.user.deleted", ...
+        rabbit.convertAndSend("user-management", message.stream() + "." + message.eventType(),
+                message.toEnvelopeJson(), confirm);
+        if (!confirm.getFuture().get(10, TimeUnit.SECONDS).ack()) {   // needs publisher confirms enabled
+            throw new IllegalStateException("Broker did not confirm message " + message.id());
+        }
     }
 }
 ```
+
+Keep Kafka disabled (`KAFKA_ENABLED=false`) if RabbitMQ replaces it.
 
 ---
 
@@ -206,6 +226,7 @@ The code is organised so that common changes stay local:
 | Add a permission check | `@PreAuthorize("hasAuthority('my:permission')")`, and declare the permission on a role in YAML |
 | Add a one-time code use case | A value in `OtpPurpose`, then `OtpService.issue/verify` |
 | Add a domain event | A record implementing `DomainEvent`, published from a transactional service method. The outbox does the rest |
+| Audit a new endpoint | Add `@Audited(action = "...", target = "...")`. For non-HTTP activities, call `AuditLog.record(...)` (see [AUDIT.md](AUDIT.md)) |
 | Change how users are searched | `UserSearchCriteria.toSpecification()` |
 
 Run `mvn verify` after changes. The integration tests cover every public flow against a real PostgreSQL.

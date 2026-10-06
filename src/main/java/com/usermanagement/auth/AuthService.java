@@ -1,5 +1,7 @@
 package com.usermanagement.auth;
 
+import com.usermanagement.audit.AuditLog;
+import com.usermanagement.audit.AuditOutcome;
 import com.usermanagement.common.error.ApiException;
 import com.usermanagement.common.error.ErrorCode;
 import com.usermanagement.otp.OtpPurpose;
@@ -14,6 +16,7 @@ import com.usermanagement.user.UserStatus;
 import com.usermanagement.user.VerificationService;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,6 +44,7 @@ public class AuthService {
     private final RefreshTokenService refreshTokens;
     private final OtpService otpService;
     private final AuthProperties properties;
+    private final AuditLog auditLog;
     private final Clock clock;
     /** Compared against when the user does not exist, so response time does not reveal it. */
     private final String dummyHash;
@@ -48,7 +52,7 @@ public class AuthService {
     public AuthService(UserLookup lookup, UserService userService, VerificationService verificationService,
                        PasswordPolicy passwordPolicy, PasswordEncoder passwordEncoder, TokenService tokenService,
                        RefreshTokenService refreshTokens, OtpService otpService, AuthProperties properties,
-                       Clock clock) {
+                       AuditLog auditLog, Clock clock) {
         this.lookup = lookup;
         this.userService = userService;
         this.verificationService = verificationService;
@@ -58,6 +62,7 @@ public class AuthService {
         this.refreshTokens = refreshTokens;
         this.otpService = otpService;
         this.properties = properties;
+        this.auditLog = auditLog;
         this.clock = clock;
         this.dummyHash = passwordEncoder.encode("timing-attack-protection");
     }
@@ -76,6 +81,11 @@ public class AuthService {
         }
         if (user.getPasswordHash() == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
             user.recordFailedLogin(properties.maxFailedAttempts(), properties.lockDuration(), now);
+            if (user.isLocked(now)) {
+                auditLog.record("security.account-locked", AuditOutcome.SUCCESS, null,
+                        AuditLog.target("user", user.getId()), Map.of("lockedUntil", user.getLockedUntil().toString(),
+                                "failedAttempts", properties.maxFailedAttempts()));
+            }
             throw new ApiException(ErrorCode.INVALID_CREDENTIALS);
         }
         ensureCanSignIn(user);

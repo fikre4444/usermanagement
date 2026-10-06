@@ -20,6 +20,9 @@ public class OutboxEvent {
     @Id
     private UUID id;
 
+    @Column(nullable = false, length = 50)
+    private String stream;
+
     @Column(name = "aggregate_type", nullable = false, length = 50)
     private String aggregateType;
 
@@ -54,14 +57,16 @@ public class OutboxEvent {
     protected OutboxEvent() {
     }
 
-    OutboxEvent(DomainEvent event, String payload) {
+    OutboxEvent(String stream, String eventType, String aggregateType, String aggregateId, Instant occurredAt,
+                String payload) {
         this.id = UUID.randomUUID();
-        this.aggregateType = event.aggregateType();
-        this.aggregateId = event.aggregateId();
-        this.eventType = event.eventType();
+        this.stream = stream;
+        this.eventType = eventType;
+        this.aggregateType = aggregateType;
+        this.aggregateId = aggregateId;
+        this.occurredAt = occurredAt;
+        this.nextAttemptAt = occurredAt;
         this.payload = payload;
-        this.occurredAt = event.occurredAt();
-        this.nextAttemptAt = event.occurredAt();
     }
 
     void markPublished(Instant now) {
@@ -83,11 +88,15 @@ public class OutboxEvent {
     }
 
     OutboxMessage toMessage() {
-        return new OutboxMessage(id, eventType, aggregateType, aggregateId, occurredAt, payload);
+        return new OutboxMessage(id, stream, eventType, aggregateType, aggregateId, occurredAt, payload);
     }
 
     public UUID getId() {
         return id;
+    }
+
+    public String getStream() {
+        return stream;
     }
 
     public String getEventType() {

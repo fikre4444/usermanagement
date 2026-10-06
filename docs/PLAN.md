@@ -83,3 +83,17 @@ com.usermanagement
 11. Dockerfile (multi-stage, non-root, layered), docker-compose (Postgres,
     Mailpit), GitHub Actions CI.
 12. Documentation: README, architecture, configuration, extension guide, API.
+
+## 5. Iteration 2: activity log for an audit service
+
+> Make the service produce a log of every activity, published to Kafka (or another broker), in a decoupled way,
+> so that a separate audit-log microservice can consume it.
+
+| Decision | Why |
+|---|---|
+| `@Audited` on every endpoint + an aspect | Coverage of "every activity" with one line per endpoint. Success, failure and denial are all captured, with request details, redacted |
+| Interceptor for requests rejected before the endpoint runs | Validation failures and malformed requests are activities too |
+| Explicit `AuditLog` calls for non-HTTP activities | Lockout, token reuse, unauthenticated access, startup actions |
+| Audit records go through the existing outbox on a separate `audit` stream, in their own transaction | Reliable even when Kafka is down, and failed attempts are kept although the activity rolls back |
+| Kafka as the default transport (topic per stream, key = subject id) | An audit log is an append-only, replayable stream. Per-user ordering, consumer groups, and replay to rebuild the audit store |
+| Transport behind `EventSink` | Producers never see Kafka. RabbitMQ or anything else is one class |

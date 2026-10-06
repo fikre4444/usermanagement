@@ -1,5 +1,6 @@
 package com.usermanagement.auth;
 
+import com.usermanagement.audit.Audited;
 import com.usermanagement.common.web.MessageResponse;
 import com.usermanagement.user.RegistrationCommand;
 import com.usermanagement.user.RegistrationService;
@@ -43,6 +44,7 @@ public class AuthController {
         this.clock = clock;
     }
 
+    @Audited(action = "auth.register", target = "user", targetId = "#result?.id()")
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Register a new user",
@@ -56,6 +58,7 @@ public class AuthController {
         return UserResponse.from(registrationService.register(command, Actor.USER));
     }
 
+    @Audited(action = "auth.verification.requested")
     @PostMapping("/verification/request")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(summary = "Send a verification code to an email address or phone number")
@@ -64,6 +67,7 @@ public class AuthController {
         return new MessageResponse(ACCEPTED);
     }
 
+    @Audited(action = "auth.verification.confirmed")
     @PostMapping("/verification/confirm")
     @Operation(summary = "Confirm an email address or phone number with the received code",
             description = "Activates a PENDING_VERIFICATION account.")
@@ -72,12 +76,14 @@ public class AuthController {
         return new MessageResponse("Verified");
     }
 
+    @Audited(action = "auth.login", target = "user", targetId = "#result?.user()?.id()")
     @PostMapping("/login")
     @Operation(summary = "Sign in with username, email or phone and a password")
     public TokenResponse login(@Valid @RequestBody LoginRequest request) {
         return toResponse(authService.login(request.identifier(), request.password()));
     }
 
+    @Audited(action = "auth.otp-login.requested")
     @PostMapping("/otp/request")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(summary = "Send a one-time sign-in code (passwordless sign-in)")
@@ -86,12 +92,14 @@ public class AuthController {
         return new MessageResponse(ACCEPTED);
     }
 
+    @Audited(action = "auth.otp-login", target = "user", targetId = "#result?.user()?.id()")
     @PostMapping("/otp/verify")
     @Operation(summary = "Sign in with a one-time code")
     public TokenResponse loginWithCode(@Valid @RequestBody CodeRequest request) {
         return toResponse(authService.loginWithCode(request.identifier(), request.code()));
     }
 
+    @Audited(action = "auth.token.refreshed", target = "user", targetId = "#result?.user()?.id()")
     @PostMapping("/token/refresh")
     @Operation(summary = "Exchange a refresh token for new tokens",
             description = "Refresh tokens are single use: the response contains a new one.")
@@ -99,6 +107,7 @@ public class AuthController {
         return toResponse(authService.refresh(request.refreshToken()));
     }
 
+    @Audited(action = "auth.logout")
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Sign out the session the refresh token belongs to")
@@ -106,6 +115,7 @@ public class AuthController {
         authService.logout(request.refreshToken());
     }
 
+    @Audited(action = "auth.password.reset-requested")
     @PostMapping("/password/forgot")
     @ResponseStatus(HttpStatus.ACCEPTED)
     @Operation(summary = "Send a password reset code")
@@ -114,6 +124,7 @@ public class AuthController {
         return new MessageResponse(ACCEPTED);
     }
 
+    @Audited(action = "auth.password.reset")
     @PostMapping("/password/reset")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Set a new password with a reset code", description = "Signs out all sessions.")

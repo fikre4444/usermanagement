@@ -12,10 +12,11 @@ in a YAML file. You don't need to write code or run a database migration to add 
   ───────────▶  │  my profile · admin users · roles & permissions · user-type schemas         │
                 │                                                                             │
                 │  core identity (users) + JSONB attributes validated by user-type schema     │
-                └────────┬─────────────────────────────┬─────────────────────────────┬────────┘
-                         │ RS256 JWT + /.well-known/jwks.json                         │ outbox events
-                         ▼                             ▼                             ▼ (webhook / custom sink)
-                   other services validate tokens offline        other services react to user.registered, ...
+                └────────┬───────────────────────────────────────┬───────────────────────────┬──────┘
+                         │ RS256 JWT + /.well-known/jwks.json    │ transactional outbox      │
+                         ▼                                       ▼                           ▼
+              other services validate          Kafka: user-management.domain-events   Kafka: user-management.audit
+              tokens offline                   (user.registered, ...)                 (every activity → audit service)
 ```
 
 ## Features
@@ -29,7 +30,8 @@ in a YAML file. You don't need to write code or run a database migration to add 
 | **Profiles** | `GET/PATCH/DELETE /users/me`, change password; changing email/phone triggers re-verification |
 | **Administration** | Search (free text, type, role, status, attribute filters), create, update, suspend/activate, unlock, delete, assign roles |
 | **Roles & permissions** | Declared in YAML (seeded at startup) and manageable at runtime; roles and permissions are embedded in the token |
-| **Integration** | JWKS endpoint for other services; **transactional outbox** delivering `user.*` events to a signed webhook or any custom sink |
+| **Integration** | JWKS endpoint for other services; **transactional outbox** delivering `user.*` domain events to **Kafka**, a signed webhook or any custom sink |
+| **Activity / audit log** | One record for **every activity**: each API call (success, failure or denial, including rejected input), security events (lockout, token reuse, unauthenticated calls) and system actions. Each record has actor, target, request info and redacted details, and is published to Kafka for an audit-log service. See [docs/AUDIT.md](docs/AUDIT.md) |
 | **Security** | BCrypt, account lockout, no user enumeration on reset/OTP endpoints, timing-safe login, GDPR-style erasure on delete, privilege-escalation guard on role assignment |
 | **Operations** | PostgreSQL + Flyway, Docker image (non-root, layered), docker-compose, health/readiness probes, Prometheus metrics, JSON logs (`prod`), request IDs, OpenAPI/Swagger UI, GitHub Actions CI |
 
@@ -45,6 +47,7 @@ docker compose up --build
 |---|---|
 | http://localhost:8080/swagger-ui.html | Interactive API documentation |
 | http://localhost:8025 | Mailpit inbox (verification and reset codes sent by email) |
+| http://localhost:8090 | Kafka UI: browse the `user-management.audit` and `user-management.domain-events` topics |
 | http://localhost:8080/actuator/health | Health |
 
 The compose stack runs the **logistics example** (`config/examples/logistics.yml`) with an administrator
@@ -136,6 +139,7 @@ claims, SMS/email providers and event sinks). See **[docs/EXTENDING.md](docs/EXT
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Every setting and environment variable, production checklist |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | How to plug the service into a domain and extend it with code |
 | [docs/API.md](docs/API.md) | Endpoint reference, error format, token format, events |
+| [docs/AUDIT.md](docs/AUDIT.md) | The activity (audit) log: what is recorded, Kafka message format, consuming it |
 | [docs/PLAN.md](docs/PLAN.md) | The plan and prompt the service was built from |
 
 ## Project layout
@@ -148,7 +152,8 @@ src/main/java/com/usermanagement
 ├── role          roles & permissions, seeding, admin API
 ├── otp           one-time passwords
 ├── notification  email / SMS delivery (pluggable)
-├── events        domain events, transactional outbox, sinks
+├── audit         activity log: @Audited endpoints, AuditLog, redaction
+├── events        domain events, transactional outbox, sinks (Kafka, webhook, log)
 ├── extension     public extension points (SPI)
 ├── config        security, OpenAPI, cross-cutting configuration
 └── common        errors, persistence base class, web utilities

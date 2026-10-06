@@ -22,6 +22,8 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
@@ -31,6 +33,10 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    /** Request attributes exposing the error to later processing (e.g. auditing). */
+    public static final String ERROR_CODE_ATTRIBUTE = GlobalExceptionHandler.class.getName() + ".code";
+    public static final String ERRORS_ATTRIBUTE = GlobalExceptionHandler.class.getName() + ".errors";
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -108,12 +114,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setProperty("code", code.name());
         if (errors != null && !errors.isEmpty()) {
             problem.setProperty("errors", errors);
+            setRequestAttribute(ERRORS_ATTRIBUTE, errors);
         }
         decorate(problem);
         return problem;
     }
 
+    private static void setRequestAttribute(String name, Object value) {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (attributes != null) {
+            attributes.setAttribute(name, value, RequestAttributes.SCOPE_REQUEST);
+        }
+    }
+
     private static void decorate(ProblemDetail problem) {
+        if (problem.getProperties() != null && problem.getProperties().get("code") != null) {
+            setRequestAttribute(ERROR_CODE_ATTRIBUTE, problem.getProperties().get("code"));
+        }
         problem.setProperty("timestamp", Instant.now().toString());
         String requestId = MDC.get(CorrelationIdFilter.MDC_KEY);
         if (requestId != null) {

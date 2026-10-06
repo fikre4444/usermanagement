@@ -142,6 +142,9 @@ returns it in the response.
 
 ## Events
 
+Domain events are published on the `domain-events` stream (Kafka topic `user-management.domain-events`). The activity
+log is published on the `audit` stream and is described in [AUDIT.md](AUDIT.md).
+
 | Type | Payload (`data`) |
 |---|---|
 | `user.registered` | `{user: UserSnapshot, occurredAt}` |

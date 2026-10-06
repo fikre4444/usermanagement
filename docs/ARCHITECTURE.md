@@ -48,7 +48,8 @@ com.usermanagement
 ├── role          Role entity, RoleService, RoleSeeder (YAML → DB), admin endpoint
 ├── otp           OtpService (issue/verify), OtpDeliveryListener (sends after commit)
 ├── notification  NotificationService routing to NotificationSender per channel (SMTP, logging fallback)
-├── events        DomainEvent, OutboxWriter, OutboxRelay, EventSink (logging, webhook)
+├── audit         @Audited + AuditAspect (every endpoint), AuditLog (explicit entries), RejectedRequestAuditor
+├── events        DomainEvent, OutboxStore/OutboxWriter, OutboxRelay, Streams, EventSink (Kafka, webhook, logging)
 ├── extension     Public SPI: RegistrationValidator, TokenClaimsCustomizer
 ├── config        SecurityConfig, OpenApiConfig, CoreConfig (clock, auditing, async, scheduling)
 └── common        ApiException + ErrorCode + GlobalExceptionHandler, BaseEntity, CorrelationIdFilter, utils
@@ -71,7 +72,7 @@ Each feature follows the same shape: **controller** (HTTP + validation of the re
 | `user_roles` | Many-to-many between users and roles. |
 | `refresh_tokens` | SHA-256 of each refresh token, its *family* (session), expiry and revocation time. |
 | `otp_codes` | SHA-256 of each one-time code (bound to user, purpose and destination), expiry, attempts, consumption. |
-| `outbox_events` | Domain events awaiting delivery, with retry bookkeeping. |
+| `outbox_events` | Messages awaiting delivery (domain events and audit records, told apart by `stream`), with retry bookkeeping. |
 
 The schema is owned by Flyway (`src/main/resources/db/migration`). Hibernate only validates it
 (`ddl-auto: validate`). All tables use UUID keys, optimistic locking (`version`) and audit timestamps.
@@ -110,15 +111,31 @@ slows down the request.
 * **Revocation**: password change/reset, suspension and deletion revoke every refresh token. This happens through
   events, in the same transaction. Access tokens expire on their own, so keep their TTL short.
 
-### Events
+### Events and the activity log
+
+Everything the service tells the outside world leaves through one **transactional outbox**, split into named
+**streams**:
+
+| Stream | Content | Written by | Default Kafka topic |
+|---|---|---|---|
+| `domain-events` | Business facts (`user.registered`, `user.deleted`...) | `OutboxWriter`, in the same transaction as the change | `user-management.domain-events` |
+| `audit` | One record per activity (see [AUDIT.md](AUDIT.md)) | `AuditLog`, in its own transaction so failures are kept too | `user-management.audit` |
 
 ```
-service method (transaction) ── publishEvent(DomainEvent) ──▶ OutboxWriter ──▶ outbox_events row
-                                                                       (same commit)
-OutboxRelay (every 5 s, FOR UPDATE SKIP LOCKED) ──▶ EventSink(s) ──▶ published_at / retry with backoff
+service method (transaction) ── publishEvent(DomainEvent) ──▶ OutboxWriter ─┐
+@Audited endpoint / security event ──▶ AuditLog (REQUIRES_NEW) ─────────────┴─▶ outbox_events (stream, payload)
+
+OutboxRelay (every 5 s, FOR UPDATE SKIP LOCKED) ──▶ sinks supporting the row's stream ──▶ published_at / retry
+                                                     KafkaEventSink (topic per stream) · WebhookEventSink · …
+                                                     (LoggingEventSink when no sink handles the stream)
 ```
 
-* **At-least-once** delivery. Consumers should de-duplicate on the event `id`.
+The producers (services, the audit aspect) don't know the transport. Which sink receives which stream is
+configuration (`app.events.kafka.topics`, `app.events.webhook.streams`), and a new transport such as RabbitMQ is one
+`EventSink` class.
+
+* **At-least-once** delivery. Consumers should de-duplicate on the envelope `id`.
+* **Ordering**: Kafka messages are keyed by aggregate id (the user), so one user's messages stay in order.
 * Several instances can relay concurrently because `SKIP LOCKED` keeps them from processing the same row twice.
 * After `max-attempts` failures an event is marked `failed_at` and kept for inspection.
 * Event types: `user.registered`, `user.updated`, `user.verified`, `user.status-changed`, `user.roles-changed`,

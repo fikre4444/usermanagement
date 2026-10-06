@@ -14,6 +14,10 @@ public class CapturingEventSink implements EventSink {
         messages.add(message);
     }
 
+    public List<OutboxMessage> messages(String stream) {
+        return messages.stream().filter(message -> message.stream().equals(stream)).toList();
+    }
+
     public List<OutboxMessage> messagesFor(String aggregateId) {
         return messages.stream().filter(message -> message.aggregateId().equals(aggregateId)).toList();
     }

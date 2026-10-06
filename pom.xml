@@ -67,6 +67,18 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Auditing (aspect around audited endpoints) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aspectj</artifactId>
+        </dependency>
+
+        <!-- Messaging: outbox publishing to Kafka (optional at runtime, see app.events.kafka) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-kafka</artifactId>
+        </dependency>
+
         <!-- Notifications -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -109,6 +121,11 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-kafka</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

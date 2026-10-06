@@ -10,7 +10,7 @@ public class LoggingEventSink implements EventSink {
 
     @Override
     public void publish(OutboxMessage message) {
-        log.info("Event {} {} for {} {}", message.id(), message.eventType(), message.aggregateType(),
-                message.aggregateId());
+        log.info("[{}] {} {} for {} {}", message.stream(), message.id(), message.eventType(),
+                message.aggregateType(), message.aggregateId());
     }
 }

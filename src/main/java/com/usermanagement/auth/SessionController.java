@@ -1,5 +1,6 @@
 package com.usermanagement.auth;
 
+import com.usermanagement.audit.Audited;
 import com.usermanagement.config.CurrentUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +23,7 @@ public class SessionController {
         this.refreshTokens = refreshTokens;
     }
 
+    @Audited(action = "user.sessions.revoked", target = "user", targetId = "#actorId")
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Sign out everywhere",

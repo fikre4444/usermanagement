@@ -1,5 +1,8 @@
 package com.usermanagement.role;
 
+import com.usermanagement.audit.AuditLog;
+import java.util.Map;
+import java.util.TreeSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -17,10 +20,12 @@ class RoleSeeder implements ApplicationRunner {
 
     private final RoleProperties properties;
     private final RoleService roleService;
+    private final AuditLog auditLog;
 
-    RoleSeeder(RoleProperties properties, RoleService roleService) {
+    RoleSeeder(RoleProperties properties, RoleService roleService, AuditLog auditLog) {
         this.properties = properties;
         this.roleService = roleService;
+        this.auditLog = auditLog;
     }
 
     @Override
@@ -33,6 +38,8 @@ class RoleSeeder implements ApplicationRunner {
                 log.debug("Role {} was created concurrently", name);
             }
         });
+        auditLog.success("system.roles-synchronized", null,
+                Map.of("roles", new TreeSet<>(properties.roles().keySet())));
         log.info("Configured roles synchronised: {}", properties.roles().keySet());
     }
 }

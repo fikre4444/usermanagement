@@ -1,5 +1,6 @@
 package com.usermanagement.user.web;
 
+import com.usermanagement.audit.Audited;
 import com.usermanagement.common.error.ApiException;
 import com.usermanagement.common.web.PageResponse;
 import com.usermanagement.user.ProfileUpdate;
@@ -51,6 +52,7 @@ public class AdminUserController {
         this.registrationService = registrationService;
     }
 
+    @Audited(action = "admin.user.searched", target = "user")
     @GetMapping
     @PreAuthorize("hasAuthority('users:read')")
     @Operation(summary = "Search users")
@@ -66,6 +68,7 @@ public class AdminUserController {
         return PageResponse.from(userService.search(criteria, pageable), UserResponse::from);
     }
 
+    @Audited(action = "admin.user.viewed", target = "user")
     @GetMapping("/{id}")
     @PreAuthorize("hasAuthority('users:read')")
     @Operation(summary = "Get a user")
@@ -73,6 +76,7 @@ public class AdminUserController {
         return UserResponse.from(userService.get(id));
     }
 
+    @Audited(action = "admin.user.created", target = "user", targetId = "#result?.id()")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('users:write') and "
@@ -87,6 +91,7 @@ public class AdminUserController {
         return UserResponse.from(registrationService.register(command, Actor.ADMIN));
     }
 
+    @Audited(action = "admin.user.updated", target = "user")
     @PatchMapping("/{id}")
     @PreAuthorize("hasAuthority('users:write')")
     @Operation(summary = "Update a user's profile, contact details, verification flags or attributes")
@@ -97,6 +102,7 @@ public class AdminUserController {
         return UserResponse.from(userService.updateProfile(id, update, Actor.ADMIN));
     }
 
+    @Audited(action = "admin.user.status-changed", target = "user")
     @PutMapping("/{id}/status")
     @PreAuthorize("hasAuthority('users:write')")
     @Operation(summary = "Activate or suspend a user", description = "Suspending signs out all sessions.")
@@ -104,6 +110,7 @@ public class AdminUserController {
         return UserResponse.from(userService.changeStatus(id, request.status()));
     }
 
+    @Audited(action = "admin.user.roles-changed", target = "user")
     @PutMapping("/{id}/roles")
     @PreAuthorize("hasAuthority('users:write') and hasAuthority('roles:write')")
     @Operation(summary = "Replace a user's roles", description = "Requires users:write and roles:write, so that "
@@ -112,6 +119,7 @@ public class AdminUserController {
         return UserResponse.from(userService.assignRoles(id, request.roles()));
     }
 
+    @Audited(action = "admin.user.unlocked", target = "user")
     @PostMapping("/{id}/unlock")
     @PreAuthorize("hasAuthority('users:write')")
     @Operation(summary = "Unlock an account locked after failed sign-in attempts")
@@ -119,6 +127,7 @@ public class AdminUserController {
         return UserResponse.from(userService.unlock(id));
     }
 
+    @Audited(action = "admin.user.deleted", target = "user")
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAuthority('users:write')")

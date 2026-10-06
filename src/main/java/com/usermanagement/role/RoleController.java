@@ -1,5 +1,6 @@
 package com.usermanagement.role;
 
+import com.usermanagement.audit.Audited;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ public class RoleController {
         this.roleService = roleService;
     }
 
+    @Audited(action = "admin.role.listed", target = "role")
     @GetMapping
     @PreAuthorize("hasAuthority('roles:read')")
     @Operation(summary = "List all roles")
@@ -42,6 +44,7 @@ public class RoleController {
         return roleService.list().stream().map(RoleResponse::from).toList();
     }
 
+    @Audited(action = "admin.role.viewed", target = "role")
     @GetMapping("/{name}")
     @PreAuthorize("hasAuthority('roles:read')")
     @Operation(summary = "Get a role")
@@ -49,6 +52,7 @@ public class RoleController {
         return RoleResponse.from(roleService.get(name));
     }
 
+    @Audited(action = "admin.role.created", target = "role", targetId = "#result?.name()")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAuthority('roles:write')")
@@ -57,6 +61,7 @@ public class RoleController {
         return RoleResponse.from(roleService.create(request.name(), request.description(), request.permissions()));
     }
 
+    @Audited(action = "admin.role.updated", target = "role")
     @PutMapping("/{name}")
     @PreAuthorize("hasAuthority('roles:write')")
     @Operation(summary = "Replace a role's description and permissions")
@@ -64,6 +69,7 @@ public class RoleController {
         return RoleResponse.from(roleService.update(name, request.description(), request.permissions()));
     }
 
+    @Audited(action = "admin.role.deleted", target = "role")
     @DeleteMapping("/{name}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PreAuthorize("hasAuthority('roles:write')")

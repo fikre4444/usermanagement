@@ -29,6 +29,11 @@ Any property can also be set through an environment variable using Spring's rela
 | `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD` | | SMTP server. Without a host, emails are logged instead |
 | `MAIL_FROM` | `no-reply@example.com` | Sender address |
 | `APP_EVENTS_WEBHOOK_URL` / `APP_EVENTS_WEBHOOK_SECRET` | | Deliver events to a webhook, signed with HMAC-SHA256 |
+| `KAFKA_ENABLED` | `false` | Publish domain events and the activity log to Kafka |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers (any other `SPRING_KAFKA_*` setting works too) |
+| `KAFKA_TOPIC_AUDIT` / `KAFKA_TOPIC_DOMAIN_EVENTS` | `user-management.audit` / `user-management.domain-events` | Topic per stream |
+| `KAFKA_CREATE_TOPICS` | `true` | Create the topics at startup if missing |
+| `AUDIT_ENABLED` | `true` | Record the activity log |
 | `CORS_ALLOWED_ORIGINS` | | Comma-separated browser origins allowed to call the API |
 | `SWAGGER_ENABLED` | `true` | Expose `/swagger-ui.html` and `/v3/api-docs` |
 
@@ -124,7 +129,14 @@ Two complete examples are in [`config/examples`](../config/examples): `logistics
 | `app.events.relay.batch-size` | `100` | Events per relay transaction |
 | `app.events.relay.max-attempts` | `10` | Attempts before an event is marked failed |
 | `app.events.relay.initial-backoff` / `max-backoff` | `10s` / `1h` | Exponential retry backoff |
-| `app.events.retention` | `7d` | How long delivered events are kept |
+| `app.events.retention` | `7d` | How long delivered messages are kept in the outbox table |
+| `app.events.webhook.streams` | `[domain-events]` | Streams sent to the webhook (add `audit` to receive the activity log) |
+| `app.events.kafka.enabled` | `false` | Publish to Kafka |
+| `app.events.kafka.topics.<stream>` | see above | Stream → topic. Streams not listed aren't sent to Kafka |
+| `app.events.kafka.send-timeout` | `10s` | Wait for the broker's acknowledgement (`acks=all`, idempotent producer) |
+| `app.events.kafka.create-topics` / `partitions` / `replication-factor` | `true` / `3` / `1` | Topic creation at startup |
+| `app.audit.enabled` | `true` | Record the activity log |
+| `app.audit.redacted-fields` | password, code, tokens... | Detail fields replaced by `***` |
 | `app.bootstrap.admin.enabled` | `true` | Create the first admin from `ADMIN_EMAIL` / `ADMIN_PASSWORD` |
 
 ## Production checklist
@@ -140,4 +152,6 @@ Two complete examples are in [`config/examples`](../config/examples): `logistics
 - [ ] Don't expose `/actuator/prometheus` publicly (route it only internally), or set `SWAGGER_ENABLED=false` if the
   API docs should be private.
 - [ ] Set `CORS_ALLOWED_ORIGINS` if browsers call the API directly.
+- [ ] With Kafka: `KAFKA_ENABLED=true`, brokers and security via `SPRING_KAFKA_*`, topics created with a production
+  replication factor (or `KAFKA_CREATE_TOPICS=false` if they are managed centrally), and ACLs on the audit topic.
 - [ ] Back up PostgreSQL. All state lives there.

@@ -1,11 +1,14 @@
 package com.usermanagement.auth;
 
+import com.usermanagement.audit.AuditLog;
+import com.usermanagement.audit.AuditOutcome;
 import com.usermanagement.common.crypto.SecureTokens;
 import com.usermanagement.common.error.ApiException;
 import com.usermanagement.common.error.ErrorCode;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -22,11 +25,14 @@ public class RefreshTokenService {
 
     private final RefreshTokenRepository repository;
     private final JwtProperties properties;
+    private final AuditLog auditLog;
     private final Clock clock;
 
-    public RefreshTokenService(RefreshTokenRepository repository, JwtProperties properties, Clock clock) {
+    public RefreshTokenService(RefreshTokenRepository repository, JwtProperties properties, AuditLog auditLog,
+                               Clock clock) {
         this.repository = repository;
         this.properties = properties;
+        this.auditLog = auditLog;
         this.clock = clock;
     }
 
@@ -47,6 +53,8 @@ public class RefreshTokenService {
         if (token.isRevoked()) {
             log.warn("Revoked refresh token presented for user {}; revoking its session", token.getUserId());
             repository.revokeFamily(token.getFamilyId(), now);
+            auditLog.record("security.refresh-token-reuse", AuditOutcome.DENIED, ErrorCode.INVALID_TOKEN.name(),
+                    AuditLog.target("user", token.getUserId()), Map.of("sessionId", token.getFamilyId().toString()));
             throw new ApiException(ErrorCode.INVALID_TOKEN);
         }
         if (token.isExpired(now)) {
