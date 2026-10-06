@@ -1,0 +1,63 @@
+# Example domain configuration: a marketplace with customers and sellers.
+#
+# Use it with:  APP_DOMAIN_CONFIG=./config/examples/ecommerce.yml
+
+app:
+  notification:
+    app-name: Acme Market
+
+  password-policy:
+    min-length: 10
+
+  roles:
+    customer:
+      description: Buys products
+      permissions: [orders:create, orders:read-own]
+    seller:
+      description: Sells products
+      permissions: [products:manage-own, orders:read-own]
+    support:
+      description: Customer support agent
+      permissions: [users:read, orders:read]
+
+  user-types:
+    user:
+      enabled: false
+
+    customer:
+      display-name: Customer
+      self-registration: true
+      email-required: true
+      default-roles: [CUSTOMER]
+      attributes:
+        - name: marketingOptIn
+          type: BOOLEAN
+        - name: preferredLanguage
+          type: ENUM
+          allowed-values: [en, am, fr]
+
+    seller:
+      display-name: Seller
+      self-registration: true
+      email-required: true
+      phone-required: true
+      default-roles: [SELLER]
+      attributes:
+        - name: storeName
+          type: STRING
+          required: true
+          min-length: 3
+          max-length: 80
+        - name: storeUrl
+          type: STRING
+          pattern: "^https://.+$"
+        - name: verifiedSeller
+          type: BOOLEAN
+          access: ADMIN_ONLY
+
+    support-agent:
+      display-name: Support agent
+      self-registration: false
+      email-required: true
+      verification-required: false
+      default-roles: [SUPPORT]

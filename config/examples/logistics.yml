@@ -1,0 +1,90 @@
+# Example domain configuration: a logistics platform with drivers, shippers and dispatchers.
+#
+# Use it with:  APP_DOMAIN_CONFIG=./config/examples/logistics.yml
+# Everything here is merged with the defaults in application.yml.
+
+app:
+  notification:
+    app-name: Acme Logistics
+
+  roles:
+    driver:
+      description: Picks up and delivers shipments
+      permissions: [shipments:read-assigned, shipments:update-status]
+    shipper:
+      description: Creates and tracks shipments
+      permissions: [shipments:create, shipments:read-own]
+    dispatcher:
+      description: Assigns shipments to drivers
+      permissions: [shipments:read, shipments:assign, users:read]
+
+  user-types:
+    # The generic "user" type is not needed in this domain.
+    user:
+      enabled: false
+
+    driver:
+      display-name: Driver
+      description: Independent or employed drivers delivering shipments
+      self-registration: true
+      phone-required: true
+      verification-required: true
+      default-roles: [DRIVER]
+      attributes:
+        - name: licenseNumber
+          label: Driving licence number
+          type: STRING
+          required: true
+          pattern: "^[A-Z0-9-]{5,20}$"
+          access: WRITE_ONCE
+        - name: vehicleType
+          type: ENUM
+          required: true
+          allowed-values: [MOTORCYCLE, VAN, TRUCK]
+        - name: vehicleCapacityKg
+          label: Vehicle capacity (kg)
+          type: NUMBER
+          min: 0
+          max: 40000
+        - name: dateOfBirth
+          type: DATE
+          required: true
+          access: WRITE_ONCE
+        - name: backgroundCheckPassed
+          type: BOOLEAN
+          access: ADMIN_ONLY
+
+    shipper:
+      display-name: Shipper
+      description: Businesses and individuals sending goods
+      self-registration: true
+      email-required: true
+      verification-required: true
+      default-roles: [SHIPPER]
+      attributes:
+        - name: companyName
+          type: STRING
+          required: true
+          max-length: 150
+        - name: taxId
+          type: STRING
+          pattern: "^[0-9]{10}$"
+        - name: businessType
+          type: ENUM
+          allowed-values: [INDIVIDUAL, SME, ENTERPRISE]
+
+    dispatcher:
+      display-name: Dispatcher
+      description: Internal staff, created by administrators only
+      self-registration: false
+      email-required: true
+      verification-required: false
+      default-roles: [DISPATCHER]
+      attributes:
+        - name: region
+          type: ENUM
+          required: true
+          allowed-values: [NORTH, SOUTH, EAST, WEST]
+        - name: employeeNumber
+          type: INTEGER
+          min: 1

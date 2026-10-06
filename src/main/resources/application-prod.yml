@@ -1,0 +1,19 @@
+# Production hardening. Activate with SPRING_PROFILES_ACTIVE=prod.
+
+app:
+  jwt:
+    # Refuse to start without a configured key pair.
+    allow-generated-key: false
+  notification:
+    # Never write one-time codes to the logs.
+    log-content: false
+
+logging:
+  structured:
+    format:
+      console: ecs
+
+management:
+  endpoint:
+    health:
+      show-details: never

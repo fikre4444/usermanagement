@@ -1,0 +1,20 @@
+spring:
+  config:
+    # The tests run against the logistics example, which also proves the example is valid.
+    import: "file:./config/examples/logistics.yml"
+
+app:
+  bootstrap:
+    admin:
+      email: admin@test.local
+      password: Admin-Passw0rd
+  otp:
+    resend-cooldown: 0s
+  events:
+    relay:
+      interval: PT0.2S
+      initial-delay: PT0.2S
+
+logging:
+  level:
+    com.usermanagement: DEBUG

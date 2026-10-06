@@ -1,0 +1,149 @@
+# Defaults for every environment. Values in ${...} can be overridden with environment variables.
+# Domain-specific configuration (user types, roles) belongs in a separate file, see docs/CONFIGURATION.md.
+
+spring:
+  application:
+    name: user-management-service
+  config:
+    # Plug in a domain configuration (user types, roles...) without rebuilding the image.
+    import: "optional:file:${APP_DOMAIN_CONFIG:./config/domain.yml}"
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/usermanagement}
+    username: ${DB_USERNAME:usermanagement}
+    password: ${DB_PASSWORD:usermanagement}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_batch_fetch_size: 50
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  data:
+    web:
+      pageable:
+        max-page-size: 100
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  forward-headers-strategy: framework
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  info:
+    env:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /swagger-ui.html
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
+
+app:
+  jwt:
+    issuer: ${JWT_ISSUER:user-management-service}
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:15m}
+    refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:30d}
+    private-key: ${JWT_PRIVATE_KEY:}
+    public-key: ${JWT_PUBLIC_KEY:}
+    allow-generated-key: true
+
+  auth:
+    max-failed-attempts: 5
+    lock-duration: 15m
+    otp-login-enabled: true
+
+  otp:
+    length: 6
+    ttl: 10m
+    max-attempts: 5
+    resend-cooldown: 60s
+
+  password-policy:
+    min-length: 8
+    max-length: 128
+    require-uppercase: true
+    require-lowercase: true
+    require-digit: true
+    require-special-character: false
+
+  notification:
+    app-name: ${APP_NAME:User Management}
+    email-from: ${MAIL_FROM:no-reply@example.com}
+    log-content: true
+
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+
+  events:
+    retention: 7d
+    relay:
+      enabled: true
+      interval: PT5S
+      batch-size: 100
+      max-attempts: 10
+      initial-backoff: 10s
+      max-backoff: 1h
+    # Set APP_EVENTS_WEBHOOK_URL (and APP_EVENTS_WEBHOOK_SECRET) to deliver events to a webhook.
+    webhook:
+      timeout: 5s
+
+  bootstrap:
+    admin:
+      enabled: true
+      user-type: admin
+      username: admin
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
+      roles: [ADMIN]
+
+  # Roles available in every deployment. Domains add their own (see config/examples).
+  roles:
+    admin:
+      description: Full administrative access
+      permissions: [users:read, users:write, roles:read, roles:write]
+    user:
+      description: Default role for self-registered users
+      permissions: []
+
+  # User types available in every deployment. Disable "user" in a domain config if you don't need it.
+  user-types:
+    admin:
+      display-name: Administrator
+      self-registration: false
+      email-required: true
+      verification-required: false
+      default-roles: [ADMIN]
+    user:
+      display-name: User
+      self-registration: true
+      email-required: true
+      verification-required: true
+      default-roles: [USER]
